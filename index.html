@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diccionario de Sinónimos y Antónimos</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Buscador de Palabras</h1>
+        <p class="subtitle">Encuentra sinónimos, antónimos y definiciones al instante.</p>
+        
+        <form id="search-form">
+            <input type="text" id="search-input" placeholder="Escribe una palabra..." required autocomplete="off">
+            <button type="submit">Buscar</button>
+        </form>
+
+        <div id="loader" class="hidden">Buscando...</div>
+        <div id="error-message" class="hidden"></div>
+
+        <div id="results" class="hidden">
+            <h2 id="word-title">Palabra</h2>
+            
+            <div class="result-section">
+                <h3>📖 Definición / Significado</h3>
+                <p id="definition-text">Cargando...</p>
+            </div>
+
+            <div class="result-section">
+                <h3>✨ Sinónimos</h3>
+                <div id="synonyms-container" class="tags-container"></div>
+            </div>
+
+            <div class="result-section">
+                <h3>⚡ Antónimos</h3>
+                <div id="antonyms-container" class="tags-container"></div>
+            </div>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
