@@ -14,54 +14,36 @@ document.getElementById('search-form').addEventListener('submit', async (e) => {
     resultsDiv.classList.add('hidden');
 
     try {
-        // Usamos la API pública pero a través de un proxy que salta el bloqueo de red (CORS)
-        const apiUrl = `https://dictionaryapi.dev{word}`;
-        const proxyUrl = `https://allorigins.win{encodeURIComponent(apiUrl)}`;
+        // CONEXIÓN A LA BASE DE DATOS: Datamuse en español para sinónimos
+        const responseSyn = await fetch(`https://datamuse.com{word}&v=es`);
+        // Consulta en paralelo para antónimos
+        const responseAnt = await fetch(`https://datamuse.com{word}&v=es`);
         
-        const response = await fetch(proxyUrl);
-        if (!response.ok) throw new Error('Error al conectar con el servidor.');
-
-        const rawData = await response.json();
-        
-        // El proxy envuelve la respuesta en un campo 'contents' como texto string
-        if (!rawData.contents) throw new Error('No se recibió respuesta del diccionario.');
-        
-        const data = JSON.parse(rawData.contents);
-
-        // Si la API responde con un error estructurado (ej. palabra no encontrada)
-        if (data.title === "No Definitions Found") {
-            throw new Error(`No encontramos la palabra "${word}". Intenta con otra.`);
+        if (!responseSyn.ok || !responseAnt.ok) {
+            throw new Error('Error al conectar con la base de datos del diccionario.');
         }
 
-        // Tomamos el primer resultado que devuelve el diccionario
-        const entry = data[0];
+        const dataSyn = await responseSyn.json();
+        const dataAnt = await responseAnt.json();
+        
+        // Si no se encuentra ningún tipo de relación con la palabra
+        if (dataSyn.length === 0 && dataAnt.length === 0) {
+            throw new Error(`No encontramos resultados para "${word}". Intenta con otra palabra.`);
+        }
 
-        // Cambiar título de la palabra en la pantalla
+        // Cambiar título en la pantalla
         document.getElementById('word-title').textContent = word.toUpperCase();
+        document.getElementById('definition-text').textContent = `Resultados encontrados en la base de datos para la palabra: ${word}.`;
 
-        // Extraer la primera definición disponible de forma segura
-        let definitionText = 'No hay definición directa disponible.';
-        if (entry.meanings && entry.meanings[0] && entry.meanings[0].definitions && entry.meanings[0].definitions[0]) {
-            definitionText = entry.meanings[0].definitions[0].definition;
-        }
-        document.getElementById('definition-text').textContent = definitionText;
+        // Mapear los resultados de la base de datos
+        const synonyms = dataSyn.map(item => item.word);
+        const antonyms = dataAnt.map(item => item.word);
 
-        // Recolectar todos los sinónimos y antónimos del array de significados
-        let synonyms = [];
-        let antonyms = [];
-
-        if (entry.meanings) {
-            entry.meanings.forEach(meaning => {
-                if (meaning.synonyms) synonyms.push(...meaning.synonyms);
-                if (meaning.antonyms) antonyms.push(...meaning.antonyms);
-            });
-        }
-
-        // Renderizar los resultados en forma de etiquetas visuales
+        // Renderizar las etiquetas en el HTML
         renderTags('synonyms-container', synonyms, 'synonym');
         renderTags('antonyms-container', antonyms, 'antonym');
 
-        // Mostrar la sección de resultados en la web
+        // Mostrar contenedor de resultados
         resultsDiv.classList.remove('hidden');
 
     } catch (error) {
@@ -76,11 +58,10 @@ function renderTags(containerId, list, typeClass) {
     const container = document.getElementById(containerId);
     container.innerHTML = '';
 
-    // Filtrar elementos repetidos
     const uniqueList = [...new Set(list)];
 
     if (uniqueList.length === 0) {
-        container.innerHTML = '<span style="color: #64748b; font-size: 14px;">No se encontraron resultados en esta categoría.</span>';
+        container.innerHTML = '<span style="color: #64748b; font-size: 14px;">No se encontraron resultados para esta sección.</span>';
         return;
     }
 
