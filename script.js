@@ -14,59 +14,54 @@ document.getElementById('search-form').addEventListener('submit', async (e) => {
     resultsDiv.classList.add('hidden');
 
     try {
-        // Consultamos la API oficial de Wikcionario en español (Wikipedia de palabras)
-        const url = `https://wiktionary.org{word}&format=json&origin=*`;
-        const response = await fetch(url);
+        // Usamos la API pública pero a través de un proxy que salta el bloqueo de red (CORS)
+        const apiUrl = `https://dictionaryapi.dev{word}`;
+        const proxyUrl = `https://allorigins.win{encodeURIComponent(apiUrl)}`;
         
-        if (!response.ok) {
-            throw new Error('Error al conectar con el servidor de diccionario.');
+        const response = await fetch(proxyUrl);
+        if (!response.ok) throw new Error('Error al conectar con el servidor.');
+
+        const rawData = await response.json();
+        
+        // El proxy envuelve la respuesta en un campo 'contents' como texto string
+        if (!rawData.contents) throw new Error('No se recibió respuesta del diccionario.');
+        
+        const data = JSON.parse(rawData.contents);
+
+        // Si la API responde con un error estructurado (ej. palabra no encontrada)
+        if (data.title === "No Definitions Found") {
+            throw new Error(`No encontramos la palabra "${word}". Intenta con otra.`);
         }
 
-        const data = await response.json();
-        const pages = data.query.pages;
-        const pageId = Object.keys(pages)[0];
+        // Tomamos el primer resultado que devuelve el diccionario
+        const entry = data[0];
 
-        // Si el ID es -1 significa que la palabra no existe en el diccionario
-        if (pageId === "-1") {
-            throw new Error(`La palabra "${word}" no se encontró en el diccionario. Revisa la ortografía.`);
-        }
-
-        const textoCompleto = pages[pageId].extract;
-
-        // Cambiar título de la palabra buscada
+        // Cambiar título de la palabra en la pantalla
         document.getElementById('word-title').textContent = word.toUpperCase();
 
-        // Procesar el texto para extraer la definición (primeras líneas)
-        const lineas = textoCompleto.split('\n').filter(l => l.trim() !== '');
-        const definicion = lineas[0] || 'Definición disponible en el Wikcionario.';
-        document.getElementById('definition-text').textContent = definicion;
+        // Extraer la primera definición disponible de forma segura
+        let definitionText = 'No hay definición directa disponible.';
+        if (entry.meanings && entry.meanings[0] && entry.meanings[0].definitions && entry.meanings[0].definitions[0]) {
+            definitionText = entry.meanings[0].definitions[0].definition;
+        }
+        document.getElementById('definition-text').textContent = definitionText;
 
-        // Extraer Sinónimos y Antónimos buscando palabras clave en el texto de Wikipedia
-        const synonyms = [];
-        const antonyms = [];
+        // Recolectar todos los sinónimos y antónimos del array de significados
+        let synonyms = [];
+        let antonyms = [];
 
-        // Buscador básico mediante expresiones regulares en el texto extraído
-        lineas.forEach(linea => {
-            const lineaMinuscula = linea.toLowerCase();
-            if (lineaMinuscula.includes('sinónimo') || lineaMinuscula.includes('sinónimos')) {
-                // Limpiamos y extraemos palabras candidatas de la línea
-                const palabras = linea.replace(/^[^\:]*\:/, '').split(/[,;.\s]+/).filter(w => w.length > 2);
-                synonyms.push(...palabras);
-            }
-            if (lineaMinuscula.includes('antónimo') || lineaMinuscula.includes('antónimos')) {
-                const palabras = linea.replace(/^[^\:]*\:/, '').split(/[,;.\s]+/).filter(w => w.length > 2);
-                antonyms.push(...palabras);
-            }
-        });
+        if (entry.meanings) {
+            entry.meanings.forEach(meaning => {
+                if (meaning.synonyms) synonyms.push(...meaning.synonyms);
+                if (meaning.antonyms) antonyms.push(...meaning.antonyms);
+            });
+        }
 
-        // Si la extracción automática no pescó etiquetas limpias, dejamos una ayuda estructurada
-        if (synonyms.length === 0) synonyms.push("Ver texto de definición para variantes");
-
-        // Renderizar las etiquetas en la pantalla
+        // Renderizar los resultados en forma de etiquetas visuales
         renderTags('synonyms-container', synonyms, 'synonym');
         renderTags('antonyms-container', antonyms, 'antonym');
 
-        // Mostrar la caja de resultados
+        // Mostrar la sección de resultados en la web
         resultsDiv.classList.remove('hidden');
 
     } catch (error) {
@@ -81,20 +76,18 @@ function renderTags(containerId, list, typeClass) {
     const container = document.getElementById(containerId);
     container.innerHTML = '';
 
-    // Filtrar elementos duplicados
+    // Filtrar elementos repetidos
     const uniqueList = [...new Set(list)];
 
     if (uniqueList.length === 0) {
-        container.innerHTML = '<span style="color: #64748b; font-size: 14px;">No se encontraron resultados directos.</span>';
+        container.innerHTML = '<span style="color: #64748b; font-size: 14px;">No se encontraron resultados en esta categoría.</span>';
         return;
     }
 
     uniqueList.forEach(item => {
         const span = document.createElement('span');
         span.className = `tag ${typeClass}`;
-        span.textContent = item.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ]/g, ''); // Limpiar símbolos extraños
-        if(span.textContent.trim().length > 1) {
-            container.appendChild(span);
-        }
+        span.textContent = item;
+        container.appendChild(span);
     });
 }
