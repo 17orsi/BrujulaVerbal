@@ -62,6 +62,7 @@ function renderTags(containerId, list, typeClass) {
 
     if (uniqueList.length === 0) {
         container.innerHTML = '<span style="color: #64748b; font-size: 14px;">No se encontraron resultados para esta sección.</span>';
+       
         return;
     }
 
