@@ -9,7 +9,6 @@
     --antonym-bg: #fee2e2;
     --antonym-text: #991b1b;
 }
-
 @media (prefers-color-scheme: dark) {
     :root {
         --bg-color: #0f172a;
