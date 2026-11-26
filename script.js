@@ -64,17 +64,6 @@ function headingLevel(heading) {
   return Number(heading.tagName.slice(1));
 }
 
-function headingContainer(heading) {
-  const parent = heading.parentElement;
-  return parent && parent.classList.contains('mw-heading') ? parent : heading;
-}
-
-function headingInside(element) {
-  if (!element) return null;
-  if (/^H[1-6]$/.test(element.tagName)) return element;
-  return element.querySelector(':scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6');
-}
-
 function translatePartOfSpeech(value) {
   const text = String(value || '').trim();
   const normalized = normalizeText(text);
@@ -100,20 +89,20 @@ function translatePartOfSpeech(value) {
   return match ? match[1] : '';
 }
 
-function nodesAfterHeading(heading, sectionEndHeading) {
-  const nodes = [];
-  const level = headingLevel(heading);
-  let current = headingContainer(heading).nextElementSibling;
-  const endContainer = sectionEndHeading ? headingContainer(sectionEndHeading) : null;
+function nodeComesBefore(first, second) {
+  return Boolean(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING);
+}
 
-  while (current && current !== endContainer) {
-    const nestedHeading = headingInside(current);
-    if (nestedHeading && headingLevel(nestedHeading) <= level) break;
-    nodes.push(current);
-    current = current.nextElementSibling;
-  }
+function isBetweenHeadings(node, startHeading, endHeading) {
+  if (!nodeComesBefore(startHeading, node)) return false;
+  return !endHeading || nodeComesBefore(node, endHeading);
+}
 
-  return nodes;
+function nextHeadingAtSameOrHigherLevel(headings, currentHeading) {
+  const currentIndex = headings.indexOf(currentHeading);
+  const currentLevel = headingLevel(currentHeading);
+  return headings.slice(currentIndex + 1)
+    .find((heading) => headingLevel(heading) <= currentLevel) || null;
 }
 
 function cleanDefinitionText(listItem) {
@@ -141,7 +130,11 @@ function collectRelatedWords(nodes, kind) {
     : /^Ant[oó]nimos?\s*:/i;
 
   for (const node of nodes) {
-    node.querySelectorAll('ul li, p').forEach((item) => {
+    const candidates = [];
+    if (node.matches && node.matches('ul li, p')) candidates.push(node);
+    candidates.push(...node.querySelectorAll('ul li, p'));
+
+    candidates.forEach((item) => {
       const line = item.textContent.replace(/\s+/g, ' ').trim();
       if (!labelPattern.test(line)) return;
 
@@ -162,67 +155,86 @@ function collectRelatedWords(nodes, kind) {
   return words;
 }
 
-function findSpanishSection(content) {
-  const headings = Array.from(content.querySelectorAll('h2, h3, h4, h5, h6'));
-  return headings.find((heading) => headingLevel(heading) === 2 && normalizeText(headingText(heading)) === 'espanol') || null;
-}
-
 function parseWiktionaryHtml(html, searchedWord, pageTitle) {
   const parsedDocument = new DOMParser().parseFromString(html, 'text/html');
   const content = parsedDocument.querySelector('.mw-parser-output') || parsedDocument.body;
-  const spanishHeading = findSpanishSection(content);
+  const allHeadings = Array.from(content.querySelectorAll('h2, h3, h4, h5, h6'));
+  const spanishHeading = allHeadings.find((heading) =>
+    headingLevel(heading) === 2 && normalizeText(headingText(heading)) === 'espanol'
+  );
 
   if (!spanishHeading) {
     throw new Error(`No encontramos una entrada en español para «${searchedWord}». Probá con otra palabra.`);
   }
 
-  const allHeadings = Array.from(content.querySelectorAll('h2, h3, h4, h5, h6'));
-  const spanishIndex = allHeadings.indexOf(spanishHeading);
-  const nextLanguageHeading = allHeadings.slice(spanishIndex + 1)
-    .find((heading) => headingLevel(heading) <= 2) || null;
-  const spanishEnd = nextLanguageHeading;
-  const spanishNodes = nodesAfterHeading(spanishHeading, spanishEnd);
-
-  const partOfSpeechHeadings = allHeadings.slice(spanishIndex + 1, nextLanguageHeading ? allHeadings.indexOf(nextLanguageHeading) : undefined)
-    .filter((heading) => translatePartOfSpeech(headingText(heading)));
+  // Delimitamos el idioma por orden real del documento. Esto evita mezclar
+  // acepciones de otras lenguas y funciona con el HTML nuevo de MediaWiki,
+  // que puede envolver los títulos en contenedores adicionales.
+  const spanishEnd = nextHeadingAtSameOrHigherLevel(allHeadings, spanishHeading);
+  const spanishHeadings = allHeadings.filter((heading) =>
+    isBetweenHeadings(heading, spanishHeading, spanishEnd)
+  );
+  const partOfSpeechHeadings = spanishHeadings.filter((heading) =>
+    translatePartOfSpeech(headingText(heading))
+  );
 
   const definitions = [];
   const synonyms = [];
   const antonyms = [];
   const definitionKeys = new Set();
+  const orderedLists = Array.from(content.querySelectorAll('ol'));
+  const relatedItems = Array.from(content.querySelectorAll('ul li, p'));
 
   for (const heading of partOfSpeechHeadings) {
-    const nodes = nodesAfterHeading(heading, spanishEnd);
+    const boundary = nextHeadingAtSameOrHigherLevel(spanishHeadings, heading);
     const partOfSpeech = translatePartOfSpeech(headingText(heading));
-    const example = extractExample(nodes);
 
-    for (const node of nodes) {
-      node.querySelectorAll('ol > li').forEach((listItem) => {
-        const definition = cleanDefinitionText(listItem);
-        if (!definition) return;
-        const key = normalizeText(definition);
-        if (definitionKeys.has(key)) return;
-        definitionKeys.add(key);
-        definitions.push({ definition, partOfSpeech, example });
-      });
+    // En vez de recorrer hermanos directos del título (frágil ante los
+    // wrappers que agrega MediaWiki), buscamos listas dentro de su rango
+    // documental. Así también se leen correctamente las entradas actuales.
+    const listsInPartOfSpeech = orderedLists.filter((list) =>
+      isBetweenHeadings(list, heading, boundary || spanishEnd)
+    );
+
+    for (const list of listsInPartOfSpeech) {
+      // Solo tomamos los ítems de primer nivel: las listas internas suelen
+      // contener notas, ejemplos o subacepciones y no deben duplicarse.
+      Array.from(list.children)
+        .filter((child) => child.tagName === 'LI')
+        .forEach((listItem) => {
+          const definition = cleanDefinitionText(listItem);
+          if (!definition) return;
+          const key = normalizeText(definition);
+          if (definitionKeys.has(key)) return;
+          definitionKeys.add(key);
+          definitions.push({
+            definition,
+            partOfSpeech,
+            example: extractExample([listItem])
+          });
+        });
     }
 
-    synonyms.push(...collectRelatedWords(nodes, 'synonym'));
-    antonyms.push(...collectRelatedWords(nodes, 'antonym'));
+    const relatedInPartOfSpeech = relatedItems.filter((item) =>
+      isBetweenHeadings(item, heading, boundary || spanishEnd)
+    );
+    synonyms.push(...collectRelatedWords(relatedInPartOfSpeech, 'synonym'));
+    antonyms.push(...collectRelatedWords(relatedInPartOfSpeech, 'antonym'));
   }
 
-  // Algunas entradas tienen una estructura más sencilla sin encabezados de
-  // categoría gramatical. En ese caso tomamos las listas numeradas de Español.
-  if (definitions.length === 0) {
-    for (const node of spanishNodes) {
-      if (headingInside(node)) continue;
-      node.querySelectorAll('ol > li').forEach((listItem) => {
-        const definition = cleanDefinitionText(listItem);
-        const key = normalizeText(definition);
-        if (!definition || definitionKeys.has(key)) return;
-        definitionKeys.add(key);
-        definitions.push({ definition, partOfSpeech: '', example: '' });
-      });
+  // Algunas entradas no tienen encabezados gramaticales estándar. En ese
+  // caso, tomamos las listas numeradas dentro de Español, sin salir de idioma.
+  if (definitions.length === 0 && partOfSpeechHeadings.length === 0) {
+    for (const list of orderedLists.filter((item) => isBetweenHeadings(item, spanishHeading, spanishEnd))) {
+      Array.from(list.children)
+        .filter((child) => child.tagName === 'LI')
+        .forEach((listItem) => {
+          const definition = cleanDefinitionText(listItem);
+          const key = normalizeText(definition);
+          if (!definition || definitionKeys.has(key)) return;
+          definitionKeys.add(key);
+          definitions.push({ definition, partOfSpeech: '', example: extractExample([listItem]) });
+        });
     }
   }
 
@@ -231,7 +243,7 @@ function parseWiktionaryHtml(html, searchedWord, pageTitle) {
   const finalAntonyms = uniqueWords(antonyms, searchedWord);
 
   if (finalDefinitions.length === 0 && finalSynonyms.length === 0 && finalAntonyms.length === 0) {
-    throw new Error(`La entrada «${searchedWord}» no tiene definiciones en español disponibles. Probá con otra palabra.`);
+    throw new Error(`La entrada «${searchedWord}» no tiene información en español disponible. Probá con otra palabra.`);
   }
 
   return {
