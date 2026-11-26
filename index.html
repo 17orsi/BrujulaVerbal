@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101827">
+  <meta name="description" content="Buscá palabras en español y encontrá sus definiciones, sinónimos y antónimos.">
+  <title>Brújula Verbal — Diccionario de español</title>
+  <link rel="preconnect" href="https://es.wiktionary.org">
+  <link rel="preconnect" href="https://upload.wikimedia.org">
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <div class="ambient ambient-one" aria-hidden="true"></div>
+  <div class="ambient ambient-two" aria-hidden="true"></div>
+
+  <header class="site-header">
+    <a class="brand" href="./" aria-label="Brújula Verbal, inicio">
+      <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
+      <span>Brújula <strong>Verbal</strong></span>
+    </a>
+    <span class="header-note"><span class="live-dot"></span> DICCIONARIO DE ESPAÑOL</span>
+  </header>
+
+  <main class="main-shell">
+    <section class="hero" aria-labelledby="hero-title">
+      <p class="eyebrow"><span class="live-dot"></span> ENCONTRÁ LA PALABRA JUSTA</p>
+      <h1 id="hero-title">Las palabras,<br><span>más cerca.</span></h1>
+      <p class="hero-copy">Buscá una palabra y descubrí qué significa, qué otras palabras dicen lo mismo y cuáles expresan lo contrario.</p>
+
+      <form id="search-form" class="search-form" role="search">
+        <label class="sr-only" for="word-input">Palabra que querés buscar</label>
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8" stroke="currentColor" stroke-width="1.7"/><path d="m16 16 4.2 4.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        <input id="word-input" name="word" type="search" placeholder="Escribí una palabra…" autocomplete="off" spellcheck="false" maxlength="70" required>
+        <button id="clear-button" class="clear-button" type="button" aria-label="Borrar búsqueda" hidden>×</button>
+        <button id="search-button" class="search-button" type="submit">Buscar <span aria-hidden="true">→</span></button>
+      </form>
+      <div class="suggestions" aria-label="Búsquedas sugeridas">
+        <span>Probá con:</span>
+        <button type="button" class="suggestion" data-word="efímero">efímero</button>
+        <button type="button" class="suggestion" data-word="valiente">valiente</button>
+        <button type="button" class="suggestion" data-word="serenidad">serenidad</button>
+      </div>
+    </section>
+
+    <section id="results" class="results" aria-live="polite" aria-busy="false">
+      <div id="empty-state" class="empty-state">
+        <div class="empty-symbol" aria-hidden="true">✳</div>
+        <h2>Tu próxima palabra está a un clic.</h2>
+        <p>Escribí una palabra en el buscador para ver su significado, sus sinónimos y sus antónimos.</p>
+      </div>
+
+      <div id="loading-state" class="loading-state" hidden>
+        <span class="loader" aria-hidden="true"></span>
+        <p>Buscando en el diccionario…</p>
+      </div>
+
+      <div id="error-state" class="message-state" hidden>
+        <div class="message-icon" aria-hidden="true">!</div>
+        <h2 id="error-title">No pudimos encontrar esa palabra.</h2>
+        <p id="error-copy">Revisá la escritura e intentá de nuevo.</p>
+      </div>
+
+      <div id="result-content" hidden>
+        <div class="result-heading">
+          <div>
+            <p class="section-kicker">RESULTADO DE BÚSQUEDA</p>
+            <h2 id="result-word"></h2>
+            <p id="result-meta" class="result-meta"></p>
+          </div>
+          <span class="result-check" title="Entrada consultada" aria-label="Entrada consultada">✓</span>
+        </div>
+
+        <section class="panel definition-panel" aria-labelledby="definition-title">
+          <div class="panel-heading">
+            <span class="panel-icon definition-icon" aria-hidden="true">Aa</span>
+            <div><h3 id="definition-title">Definición</h3><p>Qué significa esta palabra</p></div>
+          </div>
+          <ol id="definitions-list" class="definitions-list"></ol>
+          <p id="definitions-empty" class="panel-empty" hidden>No encontramos definiciones en español para esta entrada.</p>
+        </section>
+
+        <div class="related-grid">
+          <section class="panel related-panel" aria-labelledby="synonyms-title">
+            <div class="panel-heading">
+              <span class="panel-icon synonyms-icon" aria-hidden="true">≋</span>
+              <div><h3 id="synonyms-title">Sinónimos</h3><p>Palabras con significado similar</p></div>
+            </div>
+            <div id="synonyms-list" class="word-chips"></div>
+            <p id="synonyms-empty" class="panel-empty" hidden>No hay sinónimos registrados para esta palabra.</p>
+          </section>
+
+          <section class="panel related-panel" aria-labelledby="antonyms-title">
+            <div class="panel-heading">
+              <span class="panel-icon antonyms-icon" aria-hidden="true">↔</span>
+              <div><h3 id="antonyms-title">Antónimos</h3><p>Palabras con significado opuesto</p></div>
+            </div>
+            <div id="antonyms-list" class="word-chips"></div>
+            <p id="antonyms-empty" class="panel-empty" hidden>No hay antónimos registrados para esta palabra.</p>
+          </section>
+        </div>
+
+        <div class="source-row">
+          <span id="source-note">Definiciones y relaciones léxicas de Wikcionario.</span>
+          <a id="source-link" href="https://es.wiktionary.org/" target="_blank" rel="noopener noreferrer">Ver fuente ↗</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>Hecho para explorar el idioma, una palabra a la vez.</p>
+    <p>Contenido de <a href="https://es.wiktionary.org/" target="_blank" rel="noopener noreferrer">Wikcionario</a>, bajo licencia <a href="https://creativecommons.org/licenses/by-sa/4.0/deed.es" target="_blank" rel="noopener noreferrer">CC BY-SA 4.0</a>.</p>
+  </footer>
+</body>
+</html>
